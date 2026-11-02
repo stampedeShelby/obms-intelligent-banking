@@ -52,4 +52,40 @@
         <Source name="~.*Test\.java"/>
     </Match>
 
+  <!--
+    DTOs and controllers: EI_EXPOSE_REP / EI_EXPOSE_REP2 (bug rank 18, "of
+    concern").
+
+    These are Java records whose components include List fields. SpotBugs
+    observes that the generated accessor hands back the list reference and that
+    the canonical constructor stores the caller's reference.
+
+    Suppressed deliberately, for reasons specific to how these types are used:
+      - They are immutable response envelopes. Every instance is built inside a
+        service method, handed straight to Jackson for serialisation, and then
+        discarded. No OBMS code retains one or mutates one after construction.
+      - The lists they carry are themselves already produced by Stream.toList()
+        or List.of(), both of which return unmodifiable lists, so the "mutable
+        object" the warning describes cannot in fact be mutated.
+      - Adding List.copyOf defensive copies to roughly thirty record
+        constructors would add allocation and noise on the hot read path to
+        defend against a mutation that no caller is able to perform.
+
+    This exclusion is scoped to the dto and controller packages only. It does
+    not apply to the ledger, transfer or security code, where no such
+    suppression exists.
+
+    The one place a defensive copy IS taken is StatementService.StatementDocument,
+    because that record carries a byte[] of PDF content - arrays are genuinely
+    mutable and the accessor clones it.
+  -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP"/>
+    <Class name="~com\.obms\.(dto|controller)\..*"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="~com\.obms\.(dto|controller)\..*"/>
+  </Match>
+
 </FindBugsFilter>

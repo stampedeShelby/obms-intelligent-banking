@@ -113,8 +113,9 @@ public class DemoDataSeeder implements ApplicationRunner {
                 Enums.KycStatus.VERIFIED);
         Account priyaSavings = createAccount(priya, Enums.AccountType.SAVINGS,
                 new BigDecimal("184500.00"));
-        Account priyaCurrent = createAccount(priya, Enums.AccountType.CURRENT,
-                new BigDecimal("42000.00"));
+        // Second account for the same customer, so own-account transfers can
+        // be demonstrated. The returned entity is not needed here.
+        createAccount(priya, Enums.AccountType.CURRENT, new BigDecimal("42000.00"));
 
         // --- second customer, so transfers have a real counterparty -------
         Customer arjun = createCustomer("arjun@demo.obms", "Arjun", "Mehta",
@@ -162,7 +163,9 @@ public class DemoDataSeeder implements ApplicationRunner {
     // ------------------------------------------------------------------
 
     private void createStaff(String email, String firstName, String lastName, String roleName) {
-        Customer staffCustomer = createCustomer(email, firstName, lastName,
+        // A staff member still gets a customer record so the audit trail can
+        // resolve their name; the entity itself is not used further here.
+        createCustomer(email, firstName, lastName,
                 randomMobile(), "Bengaluru", "Karnataka", "560001", null,
                 Enums.KycStatus.VERIFIED);
 
@@ -178,9 +181,6 @@ public class DemoDataSeeder implements ApplicationRunner {
         user.setRoles(Set.of(role, customerRole));
         userRepository.save(user);
 
-        if (!"ADMIN".equals(roleName)) {
-            return;
-        }
         log.debug("Created staff account {} with role {}", email, roleName);
     }
 
