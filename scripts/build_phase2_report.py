@@ -115,8 +115,8 @@ def placeholder(caption):
 h1("ABSTRACT")
 para(
     "This report documents the Phase-2 implementation of the Online Banking "
-    "Management System (OBMS) designed in Phase-1. The four-layer design was "
-    "realised as a working full-stack application in the domain of retail "
+    "Management System (OBMS) designed in Phase-1. The design was "
+    "realised as a working full-stack application in retail "
     "banking, built as a layered Spring Boot monolith following the "
     "Controller–Service–Repository structure and the technology "
     "justification recorded in the Phase-1 report, rather than the "
@@ -126,21 +126,24 @@ para(
     "Spring Boot 3.3 backend with Spring Security, JPA and MySQL 8; a React 19, "
     "TypeScript and Vite single-page frontend; and a Python FastAPI service "
     "carrying the scikit-learn Isolation Forest model used for explainable "
-    "transaction anomaly detection. Static code analysis was executed with "
+    "transaction anomaly detection. Static analysis was run with "
     "SpotBugs and PMD on the backend, Ruff on the AI service, and the "
     "TypeScript compiler with ESLint on the frontend; the backend analysis "
-    "reports zero critical bugs and zero vulnerabilities, with 38 remaining "
-    "low-severity advisory warnings. Automated testing comprises 279 passing tests — 182 JUnit 5 "
+    "reports zero critical bugs and zero vulnerabilities, with 40 remaining "
+    "low-severity advisory warnings. Automated testing comprises 307 passing tests — 210 JUnit 5 "
     "unit, integration and MockMvc API tests on the backend, 66 Pytest tests "
     "on the AI service and 31 Vitest tests on the frontend — covering "
     "input validation, monetary calculation, transfer atomicity, "
     "authorisation boundaries and every principal API endpoint. Four backend "
     "tests run against a real MySQL 8.4 server, verifying the JPA mappings "
-    "against the deployment database and generating the schema scripts, and "
-    "six pin the HTTP contract between the backend and the Python service. "
-    "All of this runs on a four-job GitHub Actions pipeline, which completes "
+    "and generating the schema scripts; six pin the HTTP contract with the "
+    "Python service. "
+    "A manual pass against the deployed stack then found and corrected six "
+    "defects the automated suite had not reached, including an inoperative "
+    "brute-force lockout. All of this runs on a four-job GitHub Actions "
+    "pipeline, which completes "
     "successfully and "
-    "demonstrates an operational system in which a customer can register, "
+    "demonstrates a system in which a customer can register, "
     "authenticate with two factors, transfer funds under risk-based "
     "verification, pay bills, download a PDF statement and view AI-generated "
     "financial insights."
@@ -282,10 +285,10 @@ table(
     [
         ["Critical Bugs", "0"],
         ["Vulnerabilities", "0"],
-        ["Code Warnings", "38 (all low-severity advisory, SpotBugs bug rank 16–18)"],
+        ["Code Warnings", "40 (all low-severity advisory, SpotBugs bug rank 16–18)"],
         ["SpotBugs severity breakdown",
          "scariest (rank 1–4): 0   |   scary (5–9): 0   |   "
-         "troubling (10–14): 0   |   of concern (15–20): 38"],
+         "troubling (10–14): 0   |   of concern (15–20): 40"],
         ["PMD / CPD", "No blocking violations; build passes"],
         ["Ruff (AI service)", "All checks passed"],
         ["TypeScript + ESLint (frontend)", "No type errors, no lint errors"],
@@ -294,7 +297,7 @@ table(
 para(
     "The build gate fails on any SpotBugs finding of bug rank 1–4, which is "
     "the range SpotBugs labels “scariest” and which corresponds to the "
-    "critical-bug criterion. The 38 remaining findings are rank 16–18 "
+    "critical-bug criterion. The 40 remaining findings are rank 16–18 "
     "advisories, reported in full on every CI run rather than suppressed, so "
     "they stay visible for triage.",
     italic=True, size=9,
@@ -377,14 +380,14 @@ h2("Test Suite Totals")
 table(
     ["Suite", "Tests", "Failures", "Errors", "Skipped"],
     [
-        ["Backend — unit (4 classes)", "83", "0", "0", "0"],
-        ["Backend — integration on H2 (4 classes)", "33", "0", "0", "0"],
-        ["Backend — API / security (3 classes)", "62", "0", "0", "0"],
+        ["Backend — unit (5 classes)", "89", "0", "0", "0"],
+        ["Backend — integration on H2 (8 classes)", "49", "0", "0", "0"],
+        ["Backend — API / security (4 classes)", "68", "0", "0", "0"],
         ["Backend — integration on real MySQL 8.4 (1 class)", "4", "0", "0", "0"],
-        ["Backend subtotal", "182", "0", "0", "0"],
+        ["Backend subtotal", "210", "0", "0", "0"],
         ["AI service (Pytest)", "66", "0", "0", "0"],
         ["Frontend (Vitest)", "31", "0", "0", "0"],
-        ["TOTAL", "279", "0", "0", "0"],
+        ["TOTAL", "307", "0", "0", "0"],
     ],
 )
 
@@ -447,6 +450,27 @@ table(
          "field names read from the Java record",
          "200 OK with all 13 fields accepted, confirming Jackson's camelCase "
          "output matches the service's Pydantic aliases", "Pass"],
+        ["TC-19", "Integration", "LoginLockoutTest — correctPasswordRefusedWhileLocked",
+         "Five wrong passwords, then the correct one",
+         "Rejected while the lockout stands; the failure counter commits even "
+         "though the login throws", "Pass"],
+        ["TC-20", "Integration", "HeldTransferResolutionTest — releaseSettlesTheTransfer",
+         "An analyst releases a transfer held by fraud controls",
+         "Settles exactly once, source debited and destination credited by the "
+         "held amount, alert closed as a false positive", "Pass"],
+        ["TC-21", "Integration", "HeldTransferResolutionTest — releaseRefusesWhenFundsNoLongerAvailable",
+         "The account is drawn down while the transfer sits under review",
+         "Release refused; the account is not overdrawn and the transfer stays "
+         "pending", "Pass"],
+        ["TC-22", "API", "ErrorMappingApiTest — unmatchedPathIsNotFound",
+         "GET on an API path with no handler", "404, not 500", "Pass"],
+        ["TC-23", "Integration", "StartupHygieneTest — noInMemoryUserDetailsManager",
+         "Inspect the application context after start-up",
+         "No auto-configured in-memory account exists, so no credential is "
+         "written to the log", "Pass"],
+        ["TC-24", "Unit", "ReferencesTest — transactionReferenceUsesBankDate",
+         "Generate a transaction reference",
+         "Carries the bank's own date, not the server's timezone date", "Pass"],
         ["TC-18", "API", "POST /api/v1/fraud/score — anomaly discrimination",
          "Routine transfer (2,500 at 2pm, established payee) versus anomalous "
          "one (95,000 at 3am, new payee, 5 debits in the hour)",
@@ -467,6 +491,127 @@ placeholder("Terminal or GitHub Actions output showing 'Tests run: 178, Failures
 placeholder("Pytest output showing '60 passed' and Vitest output showing '31 passed'")
 
 # ------------------------------------------------------- core implementation
+h2("Manual Verification Against the Running System")
+para(
+    "Beyond the automated suite, the deployed stack was exercised directly "
+    "through a browser against the Docker Compose deployment, driving the "
+    "REST API with real sessions for a customer, a fraud analyst and an "
+    "administrator. This is reported separately because it found defects the "
+    "automated tests did not, and the reason it could is instructive: each "
+    "defect sat in a place the test configuration happened to exclude."
+)
+table(
+    ["#", "Defect found in the running system", "Why 279 passing tests missed it", "Resolution"],
+    [
+        ["1", "Backend crashed on first start-up with "
+              "UnsupportedOperationException during demo seeding",
+         "Role sets were built with Set.of(...), which Hibernate cannot clear "
+         "during a merge. The demo seeder is disabled under the test profile, "
+         "and registration takes the persist path rather than merge, so no "
+         "test ever saved an existing user with roles.",
+         "Mutable HashSet at all three assignment sites; RoleAssignmentTest "
+         "reproduces the merge path inside one transaction."],
+        ["2", "Brute-force lockout was entirely inoperative: six wrong "
+              "passwords followed by the correct one signed in normally",
+         "AuthService.login is @Transactional; it incremented the failure "
+         "counter and then threw to reject the attempt, so the transaction "
+         "rolled back and discarded the increment. The counter stayed at zero "
+         "permanently, so the threshold was never reached.",
+         "Counter moved to LoginAttemptService running in REQUIRES_NEW, so the "
+         "record of an attempt commits independently of the rejection. Five "
+         "regression tests."],
+        ["3", "A transfer held by fraud controls could never be completed; "
+              "clearing the alert as a false positive left the money unmoved "
+              "and the customer uninformed",
+         "No code path settled a held transfer: review() touched only the "
+         "alert row, and confirm() accepts only AWAITING_VERIFICATION while a "
+         "hold sits at PENDING. A hold cannot be produced through the API "
+         "under the test profile, because fraud scoring is disabled there.",
+         "Analyst Release and Reject endpoints that re-validate balance and "
+         "limits before settling, are idempotent, and notify the customer. "
+         "Six tests, verified end to end in the running system."],
+        ["4", "Customer-visible transaction references carried the wrong date "
+              "between midnight and 05:30 IST",
+         "References were stamped with LocalDate.now() in the server's zone; "
+         "the container runs in UTC. A statement test that should have caught "
+         "the mismatch was passing only because CI happened to run before the "
+         "timezone boundary each day.",
+         "All business dates routed through a single BankTime source of truth; "
+         "ReferencesTest guards the formats."],
+        ["5", "Any unmatched API path returned 500 INTERNAL_ERROR instead of "
+              "404",
+         "The catch-all @ExceptionHandler(Exception.class) intercepted the "
+         "exceptions Spring raises for an unmatched path, an unsupported "
+         "method and an unreadable body, relabelling client mistakes as "
+         "server faults.",
+         "Explicit handlers for 404, 405 and 400; ErrorMappingApiTest also "
+         "asserts no error body leaks a stack trace."],
+        ["6", "A generated credential was written to the application log on "
+              "every start-up",
+         "With no UserDetailsService bean, Spring Boot auto-configures an "
+         "in-memory account and prints its password. Not reachable, since "
+         "neither HTTP Basic nor form login is enabled, but it should not "
+         "exist in a banking application.",
+         "UserDetailsServiceAutoConfiguration excluded; StartupHygieneTest "
+         "asserts no in-memory user manager is registered."],
+    ],
+)
+para(
+    "The common thread is worth stating plainly: a green suite measures what "
+    "it was pointed at. Four of these six defects were invisible to the "
+    "automated tests because the test profile disables the demo seeder and "
+    "the fraud service, and a fifth was hidden by the time of day CI ran. "
+    "Running the assembled system was what exposed them.",
+    italic=True, size=9,
+)
+
+h2("Verification of Access Control in the Running System")
+para(
+    "The same pass checked authorisation against live sessions rather than "
+    "mocks. All results below were observed against the deployed application."
+)
+table(
+    ["Check", "Result"],
+    [["Protected endpoints called with no token (8 endpoints)", "401 on all"],
+     ["A pre-authentication token (issued after the password step but before "
+      "the one-time code) used against the API",
+      "401 — the second factor cannot be bypassed by replaying the "
+      "first response"],
+     ["Forged and malformed bearer tokens", "401"],
+     ["Wrong password versus unknown username", "Byte-identical responses, so "
+      "accounts cannot be enumerated"],
+     ["Password reset for a registered versus unregistered address",
+      "Identical responses"],
+     ["A valid CUSTOMER token against 7 staff, admin and analyst endpoints",
+      "403 on all"],
+     ["A valid FRAUD_ANALYST token against admin and staff endpoints",
+      "403 on all; the investigation endpoints returned 200"],
+     ["An ADMIN token reading a customer's account",
+      "403 — administrative rights do not confer access to account data"],
+     ["Account identifiers 1–24 walked with one customer's token",
+      "Only that customer's own two accounts returned; no other record "
+      "disclosed"],
+     ["Another customer's account supplied as the transfer source",
+      "403 — ownership is proved against the token, never the request body"],
+     ["Seven invalid transfers (negative, zero, three decimals, same account, "
+      "above balance, no destination)", "All rejected with specific codes"],
+     ["A transfer above the verification threshold",
+      "Held for review at risk 77/100 with per-factor explanations; both "
+      "balances unchanged until an analyst released it"],
+     ["Release of the held transfer",
+      "Settled exactly once: 183,532.00 to 123,532.00 on the source and "
+      "42,000.00 to 102,000.00 on the destination. A repeated release "
+      "returned the same reference and moved no further money"],
+     ["AI Copilot asked for another customer's balance, for all customers' "
+      "balances, and given an instruction-style prompt",
+      "Every answer contained only the authenticated customer's own figures"],
+     ["Statement download", "A valid PDF of 26,993 bytes"],
+     ["Audit trail after the analyst decisions",
+      "82 entries, with transfer.hold.released and transfer.hold.rejected "
+      "both attributed to analyst@demo.obms"]],
+)
+placeholder("Fraud investigation queue, or the audit trail showing the release attributed to the analyst")
+
 h1("CORE IMPLEMENTATION")
 
 h2("Module 1 — User Interface / Presentation Layer")
