@@ -120,8 +120,8 @@ para(
     "banking, built as a layered Spring Boot monolith following the "
     "Controller–Service–Repository structure and the technology "
     "justification recorded in the Phase-1 report, rather than the "
-    "microservices and event-streaming blueprint considered and deliberately "
-    "rejected there as disproportionate to a course-scale system. The "
+    "microservices blueprint deliberately rejected there as "
+    "disproportionate to a course-scale system. The "
     "repository is organised as three cooperating services: a Java 21 and "
     "Spring Boot 3.3 backend with Spring Security, JPA and MySQL 8; a React 19, "
     "TypeScript and Vite single-page frontend; and a Python FastAPI service "
@@ -130,13 +130,16 @@ para(
     "SpotBugs and PMD on the backend, Ruff on the AI service, and the "
     "TypeScript compiler with ESLint on the frontend; the backend analysis "
     "reports zero critical bugs and zero vulnerabilities, with 38 remaining "
-    "low-severity advisory warnings, and three findings were fixed during the "
-    "phase. Automated testing comprises 269 passing tests — 178 JUnit 5 "
-    "unit, integration and MockMvc API tests on the backend, 60 Pytest tests "
+    "low-severity advisory warnings. Automated testing comprises 279 passing tests — 182 JUnit 5 "
+    "unit, integration and MockMvc API tests on the backend, 66 Pytest tests "
     "on the AI service and 31 Vitest tests on the frontend — covering "
     "input validation, monetary calculation, transfer atomicity, "
-    "authorisation boundaries and every principal API endpoint. All of this "
-    "runs on a GitHub Actions pipeline, which completes successfully and "
+    "authorisation boundaries and every principal API endpoint. Four backend "
+    "tests run against a real MySQL 8.4 server, verifying the JPA mappings "
+    "against the deployment database and generating the schema scripts, and "
+    "six pin the HTTP contract between the backend and the Python service. "
+    "All of this runs on a four-job GitHub Actions pipeline, which completes "
+    "successfully and "
     "demonstrates an operational system in which a customer can register, "
     "authenticate with two factors, transfer funds under risk-based "
     "verification, pay bills, download a PDF statement and view AI-generated "
@@ -160,6 +163,10 @@ table(
          "every pull request targeting it, so no change reaches main without "
          "a green build."],
         ["CI Evidence", RUN_URL],
+        ["CI Jobs",
+         "Four, all passing: backend (compile, test, SpotBugs, PMD); MySQL "
+         "integration and schema generation; AI service (Ruff, Pytest); "
+         "frontend (TypeScript typecheck, ESLint, Vitest, production build)"],
     ],
 )
 
@@ -318,6 +325,17 @@ table(
          "An early return restricted a debug log line to the ADMIN role for no "
          "reason, making seeding of other roles silent. Guard removed so all "
          "staff seeding is logged."],
+        ["Generated schema was never committed: the guard used `git diff`, "
+         "which does not detect untracked files",
+         ".github/workflows/ci.yml",
+         "The schema-generation job dumped schema.sql and seed.sql correctly "
+         "(466 lines, 20 tables) but its commit step reported 'Schema "
+         "unchanged' and exited, because on the first run both files were "
+         "untracked and `git diff` compares only tracked files. Now stages "
+         "first and compares against the index. Verified in a scratch "
+         "repository that new files are detected and that a second run with "
+         "identical content still commits nothing, so regeneration creates no "
+         "churn commits."],
         ["EI_EXPOSE_REP / EI_EXPOSE_REP2 × 86 (bug rank 18)",
          "backend/.../dto/, backend/.../controller/",
          "Java records whose components are lists. Suppressed for the dto and "
@@ -360,12 +378,13 @@ table(
     ["Suite", "Tests", "Failures", "Errors", "Skipped"],
     [
         ["Backend — unit (4 classes)", "83", "0", "0", "0"],
-        ["Backend — integration (4 classes)", "33", "0", "0", "0"],
+        ["Backend — integration on H2 (4 classes)", "33", "0", "0", "0"],
         ["Backend — API / security (3 classes)", "62", "0", "0", "0"],
-        ["Backend subtotal", "178", "0", "0", "0"],
-        ["AI service (Pytest)", "60", "0", "0", "0"],
+        ["Backend — integration on real MySQL 8.4 (1 class)", "4", "0", "0", "0"],
+        ["Backend subtotal", "182", "0", "0", "0"],
+        ["AI service (Pytest)", "66", "0", "0", "0"],
         ["Frontend (Vitest)", "31", "0", "0", "0"],
-        ["TOTAL", "269", "0", "0", "0"],
+        ["TOTAL", "279", "0", "0", "0"],
     ],
 )
 
@@ -415,6 +434,24 @@ table(
          "403 NOT_OWNED; ownership is proved against the token, not the payload", "Pass"],
         ["TC-14", "API", "POST /api/auth/login — forgedTokenRejected",
          "JWT with a tampered payload and invalid signature", "401 Unauthorized", "Pass"],
+        ["TC-15", "Integration", "MySqlSchemaIT — contextStartsAgainstMySql",
+         "Boot the application against a real MySQL 8.4 server",
+         "Context starts and the connection reports MySQL, proving the JPA "
+         "mappings work against the deployment database and not only H2", "Pass"],
+        ["TC-16", "Integration", "MySqlSchemaIT — monetaryColumnsAreDecimal",
+         "Inspect JDBC metadata for all ten monetary columns",
+         "Every column is DECIMAL(19,2); a BigDecimal field mapped to a "
+         "floating-point column would fail here", "Pass"],
+        ["TC-17", "API", "POST /api/v1/fraud/score — Java/Python contract guard",
+         "Post the exact camelCase payload the Spring Boot client sends, with "
+         "field names read from the Java record",
+         "200 OK with all 13 fields accepted, confirming Jackson's camelCase "
+         "output matches the service's Pydantic aliases", "Pass"],
+        ["TC-18", "API", "POST /api/v1/fraud/score — anomaly discrimination",
+         "Routine transfer (2,500 at 2pm, established payee) versus anomalous "
+         "one (95,000 at 3am, new payee, 5 debits in the hour)",
+         "Risk score rises from 0 to 78 with a populated primary reason and "
+         "per-factor explanations, not a bare number", "Pass"],
     ],
 )
 
@@ -491,7 +528,11 @@ para(
     "extended for the intelligence modules. The automated test suite runs the "
     "same code against an in-memory H2 database under a separate Spring "
     "profile, so behaviour is verified on every build without requiring a "
-    "database server."
+    "database server. A dedicated CI job additionally boots the application "
+    "against a real MySQL 8.4 server, which is what produces "
+    "database/schema.sql and database/seed.sql: those files are generated from "
+    "the JPA mappings on every run rather than written by hand, so they cannot "
+    "drift from the code."
 )
 bullets([
     "Entities: customers, users, roles, KYC records, accounts, transactions, "
@@ -512,7 +553,11 @@ bullets([
     "for transaction scoring and copilot answers. The request carries "
     "behavioural features only — no names, account numbers or email "
     "addresses. If the service is unreachable within its timeout, the backend "
-    "applies a documented conservative fallback rather than failing open.",
+    "applies a documented conservative fallback rather than failing open. "
+    "The request format is pinned by a contract test that reads the field "
+    "names out of the Java client and asserts the Python service accepts "
+    "exactly those, so a rename on either side fails the build instead of "
+    "silently sending every transaction down the fallback path.",
 ])
 placeholder("Swagger UI listing the REST API, or a MySQL client showing the schema")
 
