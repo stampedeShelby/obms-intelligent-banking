@@ -69,50 +69,7 @@ jobs:
       # enforced here rather than trusted to a human reading the HTML.
       - name: Enforce zero critical findings
         working-directory: backend
-        run: |
-          set -uo pipefail
-          REPORT=target/spotbugsXml.xml
-          if [ ! -f "$REPORT" ]; then
-            echo "No SpotBugs report produced - failing."
-            exit 1
-          fi
-
-          # Each grep is guarded: a grep that matches nothing exits non-zero,
-          # which would otherwise abort this script before it reported anything.
-          TOTAL=$(grep -c '<BugInstance' "$REPORT" 2>/dev/null || echo 0)
-          CRITICAL=$(grep -oE 'rank="[1-9]"' "$REPORT" 2>/dev/null | wc -l | tr -d ' ')
-
-          echo "SpotBugs findings reported: ${TOTAL}"
-          echo "Critical findings (rank 1-9): ${CRITICAL}"
-
-          FINDINGS=""
-          if [ "${TOTAL}" -gt 0 ]; then
-            FINDINGS=$(grep -oE '<BugInstance type="[^"]*" priority="[0-9]*" rank="[0-9]*"' "$REPORT" 2>/dev/null || echo "")
-            echo "--- findings ---"
-            echo "${FINDINGS}"
-            echo "--- locations ---"
-            grep -oE 'classname="[^"]*"' "$REPORT" 2>/dev/null | sort -u | head -20 || echo "(none)"
-          fi
-
-          {
-            echo "### SpotBugs"
-            echo ""
-            echo "| Metric | Value |"
-            echo "| --- | --- |"
-            echo "| Total findings | ${TOTAL} |"
-            echo "| Critical (rank 1-9) | ${CRITICAL} |"
-            if [ -n "${FINDINGS}" ]; then
-              echo ""
-              echo '```'
-              echo "${FINDINGS}"
-              echo '```'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "${CRITICAL}" -ne 0 ]; then
-            echo "Critical static analysis findings present."
-            exit 1
-          fi
+        run: python3 ../scripts/check_spotbugs.py target/spotbugsXml.xml
 
       - name: Upload backend reports
         uses: actions/upload-artifact@v4
