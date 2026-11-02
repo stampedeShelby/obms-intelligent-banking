@@ -1,6 +1,7 @@
 package com.obms.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.obms.common.BankTime;
 import com.obms.domain.Enums;
 import com.obms.service.LedgerService;
 import com.obms.support.ApiTestTokens;
@@ -239,8 +240,8 @@ class BankingApiTest {
                 Enums.SpendCategory.FOOD);
 
         mockMvc.perform(get("/api/statements/" + user.account().getId())
-                        .param("from", LocalDate.now().minusMonths(1).toString())
-                        .param("to", LocalDate.now().toString())
+                        .param("from", BankTime.today().minusMonths(1).toString())
+                        .param("to", BankTime.today().toString())
                         .header("Authorization", "Bearer " + tokens.accessTokenFor(user)))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("application/pdf"))

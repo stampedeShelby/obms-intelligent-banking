@@ -1,6 +1,7 @@
 package com.obms.service;
 
 import com.obms.common.ApiException;
+import com.obms.common.BankTime;
 import com.obms.common.References;
 import com.obms.domain.Account;
 import com.obms.domain.BillPayment;
@@ -126,7 +127,7 @@ public class BillPaymentService {
     @Transactional(readOnly = true)
     public List<BillPaymentDtos.PaymentHistoryItem> upcoming(Long customerId, int withinDays) {
         return billPaymentRepository
-                .findUpcoming(customerId, LocalDate.now().plusDays(withinDays)).stream()
+                .findUpcoming(customerId, BankTime.today().plusDays(withinDays)).stream()
                 .map(BillPaymentDtos.PaymentHistoryItem::from)
                 .toList();
     }

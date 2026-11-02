@@ -1,7 +1,6 @@
 package com.obms.common;
 
 import java.security.SecureRandom;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 /**
@@ -43,21 +42,21 @@ public final class References {
      * @return a transaction reference, e.g. {@code TXN20261102K4M9P1}
      */
     public static String transactionReference() {
-        return "TXN" + LocalDate.now().format(DATE_PART) + token(6);
+        return "TXN" + BankTime.today().format(DATE_PART) + token(6);
     }
 
     /**
      * @return a reference shared by both legs of one transfer
      */
     public static String transferGroupReference() {
-        return "TRF" + LocalDate.now().format(DATE_PART) + token(6);
+        return "TRF" + BankTime.today().format(DATE_PART) + token(6);
     }
 
     /**
      * @return a bill payment reference, e.g. {@code BIL20261102X7Y2Z9}
      */
     public static String billPaymentReference() {
-        return "BIL" + LocalDate.now().format(DATE_PART) + token(6);
+        return "BIL" + BankTime.today().format(DATE_PART) + token(6);
     }
 
     private static String token(int length) {

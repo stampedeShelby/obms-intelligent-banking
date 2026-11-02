@@ -201,7 +201,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         customer.setState(state);
         customer.setPincode(pincode);
         customer.setAddressLine(randomAddress(city));
-        customer.setDateOfBirth(LocalDate.now().minusYears(24 + RANDOM.nextInt(16)));
+        customer.setDateOfBirth(LocalDate.now(ZONE).minusYears(24 + RANDOM.nextInt(16)));
         if (monthlyIncome != null) {
             customer.setDeclaredMonthlyIncome(new BigDecimal(monthlyIncome));
         }

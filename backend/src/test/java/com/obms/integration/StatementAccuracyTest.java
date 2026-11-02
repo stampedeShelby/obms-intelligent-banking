@@ -1,5 +1,6 @@
 package com.obms.integration;
 
+import com.obms.common.BankTime;
 import com.obms.domain.Enums;
 import com.obms.service.LedgerService;
 import com.obms.service.StatementService;
@@ -10,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,7 +50,7 @@ class StatementAccuracyTest extends IntegrationTestBase {
 
         StatementService.StatementDocument statement = statementService.generate(
                 user.account().getId(), user.customer().getId(),
-                LocalDate.now().minusDays(1), LocalDate.now());
+                BankTime.today().minusDays(1), BankTime.today());
 
         assertThat(statement.rowCount()).isEqualTo(3);
         assertThat(statement.totalCredits()).isEqualByComparingTo("5000.00");
@@ -73,7 +73,7 @@ class StatementAccuracyTest extends IntegrationTestBase {
 
         StatementService.StatementDocument statement = statementService.generate(
                 user.account().getId(), user.customer().getId(),
-                LocalDate.now().minusMonths(1), LocalDate.now());
+                BankTime.today().minusMonths(1), BankTime.today());
 
         assertThat(statement.content()).isNotEmpty();
         // Every PDF begins with the %PDF- magic bytes.
@@ -90,8 +90,8 @@ class StatementAccuracyTest extends IntegrationTestBase {
 
         StatementService.StatementDocument statement = statementService.generate(
                 user.account().getId(), user.customer().getId(),
-                LocalDate.now().minusYears(1).minusDays(5),
-                LocalDate.now().minusYears(1));
+                BankTime.today().minusYears(1).minusDays(5),
+                BankTime.today().minusYears(1));
 
         assertThat(statement.rowCount()).isZero();
         assertThat(statement.totalDebits()).isEqualByComparingTo("0.00");
@@ -106,7 +106,7 @@ class StatementAccuracyTest extends IntegrationTestBase {
 
         StatementService.StatementDocument statement = statementService.generate(
                 user.account().getId(), user.customer().getId(),
-                LocalDate.now().minusDays(1), LocalDate.now());
+                BankTime.today().minusDays(1), BankTime.today());
 
         byte[] first = statement.content();
         first[0] = 0;
