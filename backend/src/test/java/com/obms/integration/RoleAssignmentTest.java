@@ -8,6 +8,8 @@ import com.obms.support.IntegrationTestBase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.HashSet;
 import java.util.List;
@@ -35,6 +37,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code merge}, so the immutable set there never got cleared. The failure
  * needed a save of an <em>existing</em> user, which only the seeder did.</p>
  *
+ * <p>Both tests below run the load-modify-save sequence inside a single
+ * transaction, via TransactionTemplate. That detail is the whole test: with
+ * no surrounding transaction, findById returns a <em>detached</em> entity and
+ * merge copies into a freshly loaded managed copy whose collection is a
+ * mutable Hibernate PersistentSet - so the bug does not reproduce and the
+ * test passes whether or not the fix is present. Inside one transaction the
+ * entity stays managed and merge copies into the assigned set itself, which
+ * is the path the seeder took.</p>
+ *
  * <p>The second test below deliberately asserts that an immutable set still
  * fails, so this file documents the trap rather than just the fix. If a future
  * Hibernate version stops clearing the collection, that test turns red and
@@ -47,6 +58,13 @@ class RoleAssignmentTest extends IntegrationTestBase {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    void setTransactionManager(PlatformTransactionManager transactionManager) {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
 
     private Role customerRole() {
         return roleRepository.findByName("CUSTOMER").orElseThrow();
@@ -65,17 +83,17 @@ class RoleAssignmentTest extends IntegrationTestBase {
     }
 
     @Test
-    @DisplayName("roles can be reassigned on an existing user without crashing")
+    @DisplayName("roles can be reassigned on a managed user without crashing")
     void reassigningRolesOnPersistentUserSucceeds() {
         UserAccount created = persistUser("merge-ok@test.obms");
 
-        UserAccount reloaded = userRepository.findById(created.getId()).orElseThrow();
-        // This is the exact sequence the seeder performs and that crashed:
-        // load an existing user, replace its roles, save again.
-        reloaded.setRoles(new HashSet<>(List.of(customerRole(), staffRole())));
-
-        assertThatCode(() -> userRepository.saveAndFlush(reloaded))
-                .doesNotThrowAnyException();
+        // The exact sequence the seeder performs, in one transaction so the
+        // loaded entity stays managed: load, replace roles, save.
+        assertThatCode(() -> transactionTemplate.executeWithoutResult(status -> {
+            UserAccount managed = userRepository.findById(created.getId()).orElseThrow();
+            managed.setRoles(new HashSet<>(List.of(customerRole(), staffRole())));
+            userRepository.saveAndFlush(managed);
+        })).doesNotThrowAnyException();
 
         UserAccount after = userRepository.findById(created.getId()).orElseThrow();
         assertThat(after.getRoles())
@@ -90,10 +108,11 @@ class RoleAssignmentTest extends IntegrationTestBase {
     void immutableRoleSetFailsOnMerge() {
         UserAccount created = persistUser("merge-trap@test.obms");
 
-        UserAccount reloaded = userRepository.findById(created.getId()).orElseThrow();
-        reloaded.setRoles(Set.of(customerRole(), staffRole()));
-
-        assertThatThrownBy(() -> userRepository.saveAndFlush(reloaded))
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status -> {
+            UserAccount managed = userRepository.findById(created.getId()).orElseThrow();
+            managed.setRoles(Set.of(customerRole(), staffRole()));
+            userRepository.saveAndFlush(managed);
+        }))
                 .as("Hibernate merge clears the target collection; Set.of cannot be cleared")
                 .isInstanceOf(UnsupportedOperationException.class);
 
