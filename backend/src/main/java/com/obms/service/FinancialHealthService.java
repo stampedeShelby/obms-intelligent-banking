@@ -439,7 +439,7 @@ public class FinancialHealthService {
         snapshotRepository.save(snapshot);
     }
 
-    static String bandFor(int score) {
+    public static String bandFor(int score) {
         if (score >= 80) {
             return "EXCELLENT";
         }

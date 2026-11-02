@@ -118,7 +118,7 @@ public class CustomerService {
     /**
      * @return the identifier with all but the last four characters replaced
      */
-    static String mask(String identifier) {
+    public static String mask(String identifier) {
         String trimmed = identifier.trim();
         if (trimmed.length() <= 4) {
             return "*".repeat(trimmed.length());

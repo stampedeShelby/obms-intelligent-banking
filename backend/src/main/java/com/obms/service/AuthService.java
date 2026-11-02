@@ -367,7 +367,7 @@ public class AuthService {
     /**
      * @return the address with the local part reduced to its first character
      */
-    static String maskEmail(String email) {
+    public static String maskEmail(String email) {
         if (email == null) {
             return null;
         }

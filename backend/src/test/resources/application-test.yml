@@ -1,0 +1,56 @@
+# Test profile: H2 in memory, so the suite needs no database server and runs
+# identically on a developer machine and in CI.
+spring:
+  datasource:
+    url: jdbc:h2:mem:obms_test;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  mail:
+    host: localhost
+    port: 3025
+
+logging:
+  level:
+    root: WARN
+    com.obms: INFO
+
+obms:
+  demo:
+    enabled: false
+  security:
+    jwt-secret: "test-only-signing-key-at-least-thirty-two-bytes-long-0123456789"
+    access-token-minutes: 30
+    max-failed-logins: 5
+    lockout-minutes: 15
+  otp:
+    length: 6
+    ttl-seconds: 300
+    max-attempts: 5
+    expose-in-logs: false
+  bank:
+    name: "OBMS Bank"
+    ifsc: "OBMS0000001"
+    branch: "Test Branch"
+  transfer:
+    default-daily-limit: 100000.00
+    always-verify-above: 25000.00
+  fraud:
+    # The Python scoring service is not running during tests. Disabling it
+    # exercises the documented degraded-fallback path deterministically, which
+    # is itself a behaviour worth testing.
+    enabled: false
+    service-url: http://localhost:9999
+    timeout-ms: 500
+    medium-threshold: 40
+    high-threshold: 65
+    critical-threshold: 85
+  copilot:
+    enabled: true
+    service-url: http://localhost:9999
+    timeout-ms: 500

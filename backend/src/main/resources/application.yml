@@ -44,6 +44,12 @@ logging:
     org.hibernate.SQL: WARN
 
 obms:
+  demo:
+    # When true, DemoDataSeeder populates demo customers, six months of
+    # transaction history, beneficiaries, bills and savings goals. Off by
+    # default so the same build can be deployed without demo accounts.
+    enabled: ${OBMS_DEMO:false}
+
   # ---------------------------------------------------------------------
   # Security. The JWT secret has a development default so the project runs
   # out of the box for evaluation; it is overridden by OBMS_JWT_SECRET in
