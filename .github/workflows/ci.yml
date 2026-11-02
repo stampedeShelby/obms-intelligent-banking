@@ -243,7 +243,12 @@ jobs:
             echo "-- they are generated at runtime with randomised amounts by"
             echo "-- DemoDataSeeder, enabled with OBMS_DEMO=true."
             echo ""
-            $DUMP --no-create-info --complete-insert obms_schema roles billers
+            # Normalise the audit timestamps. Hibernate stamps created_at and
+            # updated_at with the moment of seeding, so a raw dump differs on
+            # every run and CI would commit a churn change forever. The values
+            # carry no meaning for reference rows, so they are pinned.
+            $DUMP --no-create-info --complete-insert obms_schema roles billers \
+              | sed -E "s/'[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?'/'2026-01-01 00:00:00.000000'/g"
           } > database/seed.sql
 
           echo "schema.sql: $(wc -l < database/schema.sql) lines, $(grep -c 'CREATE TABLE' database/schema.sql) tables"
