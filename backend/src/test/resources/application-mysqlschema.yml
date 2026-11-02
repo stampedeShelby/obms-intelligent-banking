@@ -1,0 +1,65 @@
+# Profile used only by MySqlSchemaIT, which runs against a real MySQL 8
+# service in CI rather than H2.
+#
+# Two jobs in one: it proves the application's JPA mappings actually work
+# against MySQL and its dialect (the ordinary suite only ever sees H2), and
+# it lets Hibernate create the real schema so CI can dump it to
+# database/schema.sql instead of anyone hand-writing that file.
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:obms_schema}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:rootpassword}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      # "create" rather than "update" so the dumped schema is a complete,
+      # from-scratch definition and not an accumulation of migrations.
+      ddl-auto: create
+    open-in-view: false
+  mail:
+    host: localhost
+    port: 3025
+
+logging:
+  level:
+    root: WARN
+    com.obms: INFO
+
+obms:
+  demo:
+    # Reference data (roles, billers) is seeded; the generated demo customers
+    # and their six months of randomised history are not, so the dump stays a
+    # schema plus stable reference rows.
+    enabled: false
+  security:
+    jwt-secret: "schema-generation-only-signing-key-at-least-thirty-two-bytes-0123"
+    access-token-minutes: 30
+    max-failed-logins: 5
+    lockout-minutes: 15
+  otp:
+    length: 6
+    ttl-seconds: 300
+    max-attempts: 5
+    expose-in-logs: false
+  bank:
+    name: "OBMS Bank"
+    ifsc: "OBMS0000001"
+    branch: "Bengaluru Main"
+  transfer:
+    default-daily-limit: 100000.00
+    always-verify-above: 25000.00
+  fraud:
+    # The Python service is not part of this job; schema generation does not
+    # need it.
+    enabled: false
+    service-url: http://localhost:9999
+    timeout-ms: 500
+    medium-threshold: 40
+    high-threshold: 65
+    critical-threshold: 85
+  copilot:
+    enabled: false
+    service-url: http://localhost:9999
+    timeout-ms: 500
