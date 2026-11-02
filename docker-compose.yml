@@ -1,0 +1,78 @@
+# OBMS local stack: MySQL, the Spring Boot backend, the FastAPI AI service and
+# the React frontend.
+#
+#   docker compose up --build
+#
+# Frontend  http://localhost:5173
+# Backend   http://localhost:8080  (Swagger at /swagger-ui.html)
+# AI        http://localhost:8000  (docs at /docs)
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: obms-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-obms}
+      MYSQL_USER: ${DB_USERNAME:-obms_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-obms_password}
+    ports:
+      - '3306:3306'
+    volumes:
+      - obms-mysql-data:/var/lib/mysql
+    healthcheck:
+      # The backend waits for this, so it does not start against a database
+      # that is still initialising.
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-p${MYSQL_ROOT_PASSWORD:-rootpassword}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: obms-ai
+    ports:
+      - '8000:8000'
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+  backend:
+    build:
+      context: ./backend
+    container_name: obms-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: mysql
+      DB_HOST: mysql
+      DB_PORT: '3306'
+      DB_NAME: ${DB_NAME:-obms}
+      DB_USERNAME: ${DB_USERNAME:-obms_user}
+      DB_PASSWORD: ${DB_PASSWORD:-obms_password}
+      AI_SERVICE_URL: http://ai-service:8000
+      OBMS_JWT_SECRET: ${OBMS_JWT_SECRET:-local-compose-development-signing-key-not-for-production}
+      OBMS_DEMO: ${OBMS_DEMO:-true}
+      OBMS_OTP_DEBUG: ${OBMS_OTP_DEBUG:-true}
+    ports:
+      - '8080:8080'
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: obms-frontend
+    depends_on:
+      - backend
+    ports:
+      - '5173:80'
+
+volumes:
+  obms-mysql-data:

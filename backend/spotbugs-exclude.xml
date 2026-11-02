@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclusions.
+
+  Each exclusion below is a deliberate, justified suppression of a pattern that
+  SpotBugs reports but which is correct in a Spring application. Nothing here
+  suppresses a real correctness or security finding - the project's static
+  analysis report lists the findings that were fixed rather than excluded.
+-->
+<FindBugsFilter>
+
+    <!--
+      EI_EXPOSE_REP / EI_EXPOSE_REP2 on JPA entities.
+      Hibernate requires mutable entity state and manages these instances
+      itself; defensively copying Instant/BigDecimal fields on every accessor
+      would break dirty checking. Entities are never returned to clients -
+      DTOs are - so the exposure SpotBugs warns about cannot reach a caller.
+    -->
+    <Match>
+        <Package name="com.obms.domain"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!--
+      Lombok-generated equals/hashCode on entities extending BaseEntity.
+      SpotBugs flags the generated code, which we do not author or control.
+    -->
+    <Match>
+        <Package name="com.obms.domain"/>
+        <Bug pattern="EQ_DOESNT_OVERRIDE_EQUALS"/>
+    </Match>
+
+    <!--
+      Spring injects configuration property beans; SpotBugs cannot see the
+      framework wiring and reports the stored references as exposed.
+    -->
+    <Match>
+        <Class name="com.obms.config.AppProperties"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!--
+      Generated test sources are not part of the shipped application.
+    -->
+    <Match>
+        <Source name="~.*Test\.java"/>
+    </Match>
+
+</FindBugsFilter>
