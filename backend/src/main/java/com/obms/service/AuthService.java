@@ -109,7 +109,10 @@ public class AuthService {
         user.setUsername(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setCustomer(savedCustomer);
-        user.setRoles(java.util.Set.of(customerRole));
+        // Mutable on purpose - see DemoDataSeeder: Hibernate merge clears
+        // this collection, so an immutable set would fail the moment this
+        // user is saved again while managed.
+        user.setRoles(new java.util.HashSet<>(java.util.List.of(customerRole)));
         userRepository.save(user);
 
         Kyc kyc = new Kyc();

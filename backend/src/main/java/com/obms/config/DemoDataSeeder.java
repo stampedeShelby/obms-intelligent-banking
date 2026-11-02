@@ -41,8 +41,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Populates a demonstrable dataset (module 11).
@@ -178,7 +178,11 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .orElseThrow(() -> new IllegalStateException("Staff user not created"));
         // Staff keep a customer role too, so a staff member can be shown the
         // customer-facing screens during a demonstration without a second login.
-        user.setRoles(Set.of(role, customerRole));
+        // A mutable set is required: Spring Data's save() on an already
+        // persistent entity goes through Hibernate merge, which clears the
+        // target collection before copying into it. An immutable Set.of
+        // throws UnsupportedOperationException at that point.
+        user.setRoles(new HashSet<>(List.of(role, customerRole)));
         userRepository.save(user);
 
         log.debug("Created staff account {} with role {}", email, roleName);
@@ -210,7 +214,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         user.setUsername(email);
         user.setPasswordHash(passwordEncoder.encode(DEMO_PASSWORD));
         user.setCustomer(saved);
-        user.setRoles(Set.of(customerRole));
+        user.setRoles(new HashSet<>(List.of(customerRole)));
         userRepository.save(user);
 
         Kyc kyc = new Kyc();
