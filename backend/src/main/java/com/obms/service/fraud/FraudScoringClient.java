@@ -4,7 +4,10 @@ import com.obms.config.AppProperties;
 import com.obms.domain.Enums;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.MediaType;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -35,8 +38,8 @@ public class FraudScoringClient {
         int timeout = properties.getFraud().getTimeoutMs();
         this.restTemplate = builder
                 .rootUri(properties.getFraud().getServiceUrl())
-                .connectTimeout(Duration.ofMillis(timeout))
-                .readTimeout(Duration.ofMillis(timeout))
+                .setConnectTimeout(Duration.ofMillis(timeout))
+                .setReadTimeout(Duration.ofMillis(timeout))
                 .build();
     }
 
@@ -53,8 +56,15 @@ public class FraudScoringClient {
                     request.amount(), properties.getTransfer().getAlwaysVerifyAbove());
         }
         try {
-            Map<String, Object> body = restTemplate.postForObject(
-                    "/api/v1/fraud/score", request, Map.class);
+            // ParameterizedTypeReference is used rather than Map.class so the
+            // response is typed and the build stays free of unchecked warnings.
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    "/api/v1/fraud/score",
+                    HttpMethod.POST,
+                    new HttpEntity<>(request),
+                    new ParameterizedTypeReference<Map<String, Object>>() { });
+
+            Map<String, Object> body = response.getBody();
             if (body == null) {
                 throw new RestClientException("Empty response from scoring service");
             }
@@ -67,7 +77,6 @@ public class FraudScoringClient {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private RiskAssessment mapResponse(Map<String, Object> body) {
         int score = clampScore(toInt(body.get("risk_score")));
         Enums.RiskLevel level = bandFor(score);
