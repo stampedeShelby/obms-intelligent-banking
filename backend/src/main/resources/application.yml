@@ -1,0 +1,135 @@
+spring:
+  application:
+    name: obms-backend
+
+  profiles:
+    default: mysql
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: Asia/Kolkata
+
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    root: INFO
+    com.obms: ${OBMS_LOG_LEVEL:INFO}
+    org.hibernate.SQL: WARN
+
+obms:
+  # ---------------------------------------------------------------------
+  # Security. The JWT secret has a development default so the project runs
+  # out of the box for evaluation; it is overridden by OBMS_JWT_SECRET in
+  # any real deployment. It is not a credential to a real system.
+  # ---------------------------------------------------------------------
+  security:
+    jwt-secret: ${OBMS_JWT_SECRET:obms-development-only-signing-key-change-in-production-0123456789}
+    access-token-minutes: ${OBMS_JWT_MINUTES:30}
+    max-failed-logins: 5
+    lockout-minutes: 15
+
+  otp:
+    length: 6
+    ttl-seconds: 300
+    max-attempts: 5
+    # When true the OTP is written to the application log for demonstration.
+    # Must stay false for any deployment that is not a local demo.
+    expose-in-logs: ${OBMS_OTP_DEBUG:false}
+
+  bank:
+    name: "OBMS Bank"
+    ifsc: "OBMS0000001"
+    branch: "Bengaluru Main"
+
+  transfer:
+    default-daily-limit: 100000.00
+    # Transfers at or above this amount always require OTP regardless of risk.
+    always-verify-above: 25000.00
+
+  fraud:
+    service-url: ${AI_SERVICE_URL:http://localhost:8000}
+    enabled: ${OBMS_FRAUD_ENABLED:true}
+    timeout-ms: 3000
+    # Risk score thresholds that map to the four risk bands.
+    medium-threshold: 40
+    high-threshold: 65
+    critical-threshold: 85
+
+  copilot:
+    service-url: ${AI_SERVICE_URL:http://localhost:8000}
+    enabled: true
+    timeout-ms: 15000
+
+---
+# ---------------------------------------------------------------------------
+# MySQL profile - the stack specified in the Phase-1 report. Used for local
+# running and for the demonstration.
+# ---------------------------------------------------------------------------
+spring:
+  config:
+    activate:
+      on-profile: mysql
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:obms}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
+    username: ${DB_USERNAME:obms_user}
+    password: ${DB_PASSWORD:obms_password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      pool-name: obms-pool
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+
+---
+# ---------------------------------------------------------------------------
+# H2 profile - used by the automated test suite and by CI, so the build can
+# verify behaviour without a database server. Schema is identical in shape;
+# MySQL remains the deployment target.
+# ---------------------------------------------------------------------------
+spring:
+  config:
+    activate:
+      on-profile: h2
+  datasource:
+    url: jdbc:h2:mem:obms;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+  h2:
+    console:
+      enabled: true
+
+obms:
+  fraud:
+    enabled: false
