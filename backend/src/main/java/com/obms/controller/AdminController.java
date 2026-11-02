@@ -2,8 +2,10 @@ package com.obms.controller;
 
 import com.obms.domain.Enums;
 import com.obms.dto.AdminDtos;
+import com.obms.dto.TransferDtos;
 import com.obms.security.CurrentUser;
 import com.obms.service.AdminService;
+import com.obms.service.TransferService;
 import com.obms.service.fraud.FraudService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,6 +43,7 @@ public class AdminController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AdminService adminService;
+    private final TransferService transferService;
     private final CurrentUser currentUser;
 
     // ---- shared statistics -------------------------------------------
@@ -119,6 +122,24 @@ public class AdminController {
     }
 
     @Operation(summary = "Monitoring summary for the fraud dashboard")
+    @Operation(summary = "Release a transfer that fraud controls held, settling it")
+    @PostMapping("/api/fraud/investigation/transfers/{pendingRef}/release")
+    public TransferDtos.TransferResult releaseHeldTransfer(
+            @PathVariable String pendingRef,
+            @RequestBody(required = false) AdminDtos.HoldDecisionRequest request) {
+        return transferService.releaseHeld(pendingRef, currentUser.username(),
+                request == null ? null : request.notes());
+    }
+
+    @Operation(summary = "Reject a held transfer after review; no money moves")
+    @PostMapping("/api/fraud/investigation/transfers/{pendingRef}/reject")
+    public void rejectHeldTransfer(
+            @PathVariable String pendingRef,
+            @RequestBody(required = false) AdminDtos.HoldDecisionRequest request) {
+        transferService.rejectHeld(pendingRef, currentUser.username(),
+                request == null ? null : request.notes());
+    }
+
     @GetMapping("/api/fraud/investigation/monitoring")
     public FraudService.MonitoringSummary monitoring(
             @RequestParam(defaultValue = "7") int days) {

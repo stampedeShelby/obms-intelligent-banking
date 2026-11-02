@@ -158,7 +158,13 @@ public class FraudService {
         alert.setDecision(assessment.decision().name());
         alert.setModelVersion(assessment.modelVersion());
         alert.setExplanationJson(serialiseFactors(assessment));
-        alert.setStatus(assessment.level() == Enums.RiskLevel.LOW
+        // Keyed on the decision, not the band. If the system let the
+        // transaction through there is nothing for an analyst to action, so the
+        // row is audit history rather than an open case. This also stops an
+        // analyst-released hold from immediately raising a fresh open alert for
+        // the transfer they just cleared, since its band stays HIGH while its
+        // decision becomes ALLOW.
+        alert.setStatus(assessment.decision() == RiskAssessment.Decision.ALLOW
                 ? Enums.AlertStatus.CLOSED
                 : Enums.AlertStatus.OPEN);
         return fraudAlertRepository.save(alert);

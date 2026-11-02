@@ -30,6 +30,13 @@ public interface FraudAlertRepository extends JpaRepository<FraudAlert, Long> {
             """)
     List<FraudAlert> findActiveForCustomer(@Param("customerId") Long customerId);
 
+    /**
+     * Finds the alert raised for a specific evaluated operation, which for a
+     * held transfer is its pending reference. Used when an analyst releases or
+     * rejects the hold, so the alert and the transfer are resolved together.
+     */
+    Optional<FraudAlert> findByEvaluatedRef(String evaluatedRef);
+
     long countByRiskLevel(Enums.RiskLevel riskLevel);
 
     long countByStatus(Enums.AlertStatus status);

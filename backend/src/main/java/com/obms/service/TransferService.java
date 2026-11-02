@@ -12,6 +12,7 @@ import com.obms.domain.Transaction;
 import com.obms.dto.TransferDtos;
 import com.obms.repository.AccountRepository;
 import com.obms.repository.BeneficiaryRepository;
+import com.obms.repository.FraudAlertRepository;
 import com.obms.repository.IdempotencyRecordRepository;
 import com.obms.repository.PendingTransferRepository;
 import com.obms.repository.TransactionRepository;
@@ -20,6 +21,7 @@ import com.obms.service.fraud.RiskAssessment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -70,6 +73,7 @@ public class TransferService {
     private final TransactionRepository transactionRepository;
     private final PendingTransferRepository pendingTransferRepository;
     private final IdempotencyRecordRepository idempotencyRepository;
+    private final FraudAlertRepository fraudAlertRepository;
     private final LedgerService ledgerService;
     private final FraudService fraudService;
     private final OtpService otpService;
@@ -159,6 +163,144 @@ public class TransferService {
         pending.setStatus(Enums.TransactionStatus.COMPLETED);
         pending.setResultingReference(result.reference());
         return result;
+    }
+
+    // ------------------------------------------------------------------
+    // analyst resolution of a held transfer
+    // ------------------------------------------------------------------
+
+    /**
+     * Settles a transfer that fraud controls held for review.
+     *
+     * <p>Before this existed a held transfer could never complete: clearing the
+     * alert as a false positive only updated the alert row, and
+     * {@link #confirm} accepts nothing but {@code AWAITING_VERIFICATION}. The
+     * customer's money was never taken, but their transfer never happened
+     * either and nothing recorded an outcome.</p>
+     *
+     * <p>Releasing re-runs the balance and daily-limit checks rather than
+     * trusting the figures captured when the transfer was held. Time has
+     * passed; the account may since have been drawn down or frozen, and
+     * settling on stale numbers is how an overdraft gets created.</p>
+     *
+     * @param pendingRef the held transfer's reference
+     * @param analyst    username recorded against the decision
+     * @return the settled transfer
+     * @throws ApiException if it is not held, or no longer passes validation
+     */
+    @Transactional
+    public TransferDtos.TransferResult releaseHeld(String pendingRef, String analyst, String notes) {
+        PendingTransfer pending = pendingTransferRepository.findByPendingRef(pendingRef)
+                .orElseThrow(() -> ApiException.notFound("Held transfer"));
+
+        if (pending.getStatus() == Enums.TransactionStatus.COMPLETED) {
+            // Idempotent: a second release returns the original outcome rather
+            // than debiting the customer twice.
+            return TransferDtos.TransferResult.completed(
+                    pending.getResultingReference(), pending.getAmount(),
+                    pending.getSourceAccount().getBalance(), pending.getRiskScore(),
+                    pending.getRiskLevel());
+        }
+        if (pending.getStatus() != Enums.TransactionStatus.PENDING) {
+            throw ApiException.invalidState(
+                    "This transfer is " + pending.getStatus() + " and cannot be released.");
+        }
+
+        Account source = accountRepository.findById(pending.getSourceAccount().getId())
+                .orElseThrow(() -> ApiException.notFound("Source account"));
+        if (!source.isOperational()) {
+            throw ApiException.invalidState("The source account is now " + source.getStatus() + ".");
+        }
+        if (pending.getAmount().compareTo(source.availableBalance()) > 0) {
+            throw ApiException.insufficientFunds();
+        }
+        validateDailyLimit(source, pending.getAmount());
+
+        Resolution destination = new Resolution(
+                pending.getDestinationAccount(), pending.getBeneficiary());
+
+        RiskAssessment cleared = new RiskAssessment(
+                pending.getRiskScore() == null ? 0 : pending.getRiskScore(),
+                pending.getRiskLevel() == null ? Enums.RiskLevel.LOW : pending.getRiskLevel(),
+                RiskAssessment.Decision.ALLOW,
+                "Released after review by " + analyst + ".",
+                List.of(),
+                "analyst_released",
+                false);
+
+        TransferDtos.TransferResult result = settle(source, destination, pending.getAmount(),
+                pending.getDescription(), cleared, analyst, null);
+
+        pending.setStatus(Enums.TransactionStatus.COMPLETED);
+        pending.setResultingReference(result.reference());
+
+        resolveAlert(pendingRef, Enums.AlertStatus.FALSE_POSITIVE, analyst, notes);
+
+        auditService.record("transfer.hold.released", "PendingTransfer", pendingRef,
+                "Released by " + analyst + " and settled as " + result.reference());
+        notificationService.notify(source.getCustomer(), Enums.NotificationType.TRANSACTION_SUCCESS,
+                "Held transfer released",
+                "Your transfer of " + pending.getAmount() + " was reviewed, cleared and completed. "
+                        + "Reference " + result.reference() + ".",
+                "/transactions/" + result.reference());
+
+        return result;
+    }
+
+    /**
+     * Refuses a held transfer after review. No money moves; the transfer is
+     * recorded as failed so the outcome is not left open, and the customer is
+     * told rather than left waiting.
+     */
+    @Transactional
+    public void rejectHeld(String pendingRef, String analyst, String notes) {
+        PendingTransfer pending = pendingTransferRepository.findByPendingRef(pendingRef)
+                .orElseThrow(() -> ApiException.notFound("Held transfer"));
+
+        if (pending.getStatus() == Enums.TransactionStatus.COMPLETED) {
+            throw ApiException.invalidState("This transfer has already settled and cannot be rejected.");
+        }
+        pending.setStatus(Enums.TransactionStatus.FAILED);
+
+        resolveAlert(pendingRef, Enums.AlertStatus.CONFIRMED_FRAUD, analyst, notes);
+
+        auditService.record("transfer.hold.rejected", "PendingTransfer", pendingRef,
+                "Rejected by " + analyst);
+        notificationService.notify(pending.getCustomer(),
+                Enums.NotificationType.SUSPICIOUS_ACTIVITY,
+                "Transfer declined after review",
+                "Your transfer of " + pending.getAmount()
+                        + " was declined following a fraud review. No money left your account. "
+                        + "Contact support if you believe this is wrong.",
+                "/fraud-alerts");
+    }
+
+    private void resolveAlert(String evaluatedRef, Enums.AlertStatus status,
+                              String analyst, String notes) {
+        fraudAlertRepository.findByEvaluatedRef(evaluatedRef).ifPresent(alert -> {
+            alert.setStatus(status);
+            alert.setReviewedBy(analyst);
+            alert.setReviewedAt(Instant.now());
+            alert.setReviewNotes(notes);
+            alert.setMarkedFalsePositive(status == Enums.AlertStatus.FALSE_POSITIVE);
+        });
+    }
+
+    /**
+     * Fails step-up transfers whose OTP window has closed.
+     *
+     * <p>{@code expireStale} existed but nothing ever called it, so abandoned
+     * transfers sat at {@code AWAITING_VERIFICATION} indefinitely. The query
+     * deliberately does not touch {@code PENDING} rows: those are held for
+     * analyst review and must not time out on a ten-minute OTP window.</p>
+     */
+    @Scheduled(fixedDelay = 300_000L)
+    @Transactional
+    public void expireAbandonedStepUps() {
+        int expired = pendingTransferRepository.expireStale(Instant.now());
+        if (expired > 0) {
+            log.info("Expired {} unverified transfer(s) past their OTP window", expired);
+        }
     }
 
     // ------------------------------------------------------------------

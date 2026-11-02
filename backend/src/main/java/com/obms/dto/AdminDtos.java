@@ -15,6 +15,19 @@ import java.util.List;
 /** Admin, staff and fraud-analyst projections (module 6). */
 public final class AdminDtos {
 
+    /**
+     * An analyst's decision on a transfer that fraud controls held.
+     *
+     * @param notes free-text reasoning, recorded on the alert and audit trail
+     */
+    public record HoldDecisionRequest(
+            @jakarta.validation.constraints.Size(max = 500,
+                    message = "Notes may be at most 500 characters")
+            String notes
+    ) {
+    }
+
+
     private AdminDtos() {
         // DTO holder
     }
