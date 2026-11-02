@@ -121,7 +121,6 @@ public class AdminController {
         return adminService.reviewAlert(alertId, currentUser.username(), request);
     }
 
-    @Operation(summary = "Monitoring summary for the fraud dashboard")
     @Operation(summary = "Release a transfer that fraud controls held, settling it")
     @PostMapping("/api/fraud/investigation/transfers/{pendingRef}/release")
     public TransferDtos.TransferResult releaseHeldTransfer(
@@ -140,6 +139,7 @@ public class AdminController {
                 request == null ? null : request.notes());
     }
 
+    @Operation(summary = "Monitoring summary for the fraud dashboard")
     @GetMapping("/api/fraud/investigation/monitoring")
     public FraudService.MonitoringSummary monitoring(
             @RequestParam(defaultValue = "7") int days) {
