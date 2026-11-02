@@ -10,6 +10,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -86,6 +92,55 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of(409, "CONSTRAINT_VIOLATION",
                         "That operation conflicts with an existing record.", request.getRequestURI()));
+    }
+
+    /**
+     * Client errors that Spring itself raises.
+     *
+     * <p>Without these, the catch-all below reported all of them as 500. A QA
+     * pass found {@code GET /api/transfers/pending} - a path with no handler -
+     * returning 500 INTERNAL_ERROR instead of 404. That is wrong twice over:
+     * it tells the caller the server broke when the request was at fault, and
+     * in a monitored deployment every mistyped URL would raise a server-error
+     * alert, burying real failures in noise.</p>
+     */
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ErrorResponse> handleNoHandler(Exception ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(404, "NOT_FOUND",
+                        "No endpoint matches this request.", request.getRequestURI()));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotAllowed(
+            HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(ErrorResponse.of(405, "METHOD_NOT_ALLOWED",
+                        "That HTTP method is not supported on this endpoint.",
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Unparseable or absent request body. A malformed JSON payload is the
+     * caller's mistake, so it must not be reported as a server fault.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of(400, "MALFORMED_REQUEST",
+                        "The request body could not be read.", request.getRequestURI()));
+    }
+
+    /** A path or query value of the wrong type, e.g. a word where an id belongs. */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class})
+    public ResponseEntity<ErrorResponse> handleBadParameter(Exception ex,
+                                                            HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of(400, "INVALID_PARAMETER",
+                        "A request parameter is missing or of the wrong type.",
+                        request.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)
