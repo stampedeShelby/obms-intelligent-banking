@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -64,6 +63,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final OtpService otpService;
+    private final LoginAttemptService loginAttemptService;
     private final NotificationService notificationService;
     private final AuditService auditService;
     private final AppProperties properties;
@@ -194,12 +194,14 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            registerFailedAttempt(user, ipAddress);
+            // Must be recorded in its own transaction: this method is
+            // @Transactional and the throw below rolls it back, which would
+            // otherwise discard the increment and leave the lockout dead.
+            loginAttemptService.recordFailure(username, ipAddress);
             throw ApiException.invalidCredentials();
         }
 
-        user.setFailedLoginAttempts(0);
-        user.setLockedUntil(null);
+        loginAttemptService.recordSuccess(username);
 
         if (!user.isTwoFactorEnabled()) {
             return new AuthDtos.LoginResponse(false, null,
@@ -323,22 +325,6 @@ public class AuthService {
     // helpers
     // ------------------------------------------------------------------
 
-    private void registerFailedAttempt(UserAccount user, String ipAddress) {
-        int attempts = user.getFailedLoginAttempts() + 1;
-        user.setFailedLoginAttempts(attempts);
-
-        int max = properties.getSecurity().getMaxFailedLogins();
-        if (attempts >= max) {
-            user.setLockedUntil(Instant.now()
-                    .plus(properties.getSecurity().getLockoutMinutes(), ChronoUnit.MINUTES));
-            log.warn("Locked account {} after {} failed attempts", user.getUsername(), attempts);
-            auditService.recordAs(user.getUsername(), "auth.account.locked", false,
-                    "Locked after " + attempts + " failed attempts", ipAddress);
-        } else {
-            auditService.recordAs(user.getUsername(), "auth.login.failed", false,
-                    "Failed attempt " + attempts + " of " + max, ipAddress);
-        }
-    }
 
     private String issueAccessToken(UserAccount user) {
         return jwtService.issueAccessToken(user.getUsername(), roleNames(user),
