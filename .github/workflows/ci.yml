@@ -64,31 +64,34 @@ jobs:
       # Fails the build on any SpotBugs finding of rank 1-9, which is the
       # "critical bug" definition used in the Phase-2 report. The threshold is
       # enforced here rather than trusted to a human reading the HTML.
+      # Fails the build on any SpotBugs finding of rank 1-9, which is the
+      # "critical bug" definition used in the Phase-2 report. The threshold is
+      # enforced here rather than trusted to a human reading the HTML.
       - name: Enforce zero critical findings
         working-directory: backend
         run: |
-          set -euo pipefail
+          set -uo pipefail
           REPORT=target/spotbugsXml.xml
           if [ ! -f "$REPORT" ]; then
             echo "No SpotBugs report produced - failing."
             exit 1
           fi
-          TOTAL=$(grep -c '<BugInstance' "$REPORT" || true)
+
+          # Each grep is guarded: a grep that matches nothing exits non-zero,
+          # which would otherwise abort this script before it reported anything.
+          TOTAL=$(grep -c '<BugInstance' "$REPORT" 2>/dev/null || echo 0)
+          CRITICAL=$(grep -oE 'rank="[1-9]"' "$REPORT" 2>/dev/null | wc -l | tr -d ' ')
+
           echo "SpotBugs findings reported: ${TOTAL}"
-          CRITICAL=0
-          for rank in 1 2 3 4 5 6 7 8 9; do
-            n=$(grep -o "rank=\"${rank}\"" "$REPORT" | wc -l | tr -d ' ')
-            CRITICAL=$((CRITICAL + n))
-          done
           echo "Critical findings (rank 1-9): ${CRITICAL}"
 
-          # Print every finding to the log. Without this the build says a
-          # threshold was breached but not by what, and the report artifact
-          # is not always reachable.
+          FINDINGS=""
           if [ "${TOTAL}" -gt 0 ]; then
+            FINDINGS=$(grep -oE '<BugInstance type="[^"]*" priority="[0-9]*" rank="[0-9]*"' "$REPORT" 2>/dev/null || echo "")
             echo "--- findings ---"
-            grep -oE '<BugInstance type="[^"]+" priority="[0-9]+" rank="[0-9]+"' "$REPORT" || true
-            grep -oE '<(Class|Method|SourceLine) classname="[^"]+"( name="[^"]+")?' "$REPORT" | head -40 || true
+            echo "${FINDINGS}"
+            echo "--- locations ---"
+            grep -oE 'classname="[^"]*"' "$REPORT" 2>/dev/null | sort -u | head -20 || echo "(none)"
           fi
 
           {
@@ -98,13 +101,14 @@ jobs:
             echo "| --- | --- |"
             echo "| Total findings | ${TOTAL} |"
             echo "| Critical (rank 1-9) | ${CRITICAL} |"
-            if [ "${TOTAL}" -gt 0 ]; then
+            if [ -n "${FINDINGS}" ]; then
               echo ""
               echo '```'
-              grep -oE '<BugInstance type="[^"]+" priority="[0-9]+" rank="[0-9]+"' "$REPORT" || true
+              echo "${FINDINGS}"
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
           if [ "${CRITICAL}" -ne 0 ]; then
             echo "Critical static analysis findings present."
             exit 1
