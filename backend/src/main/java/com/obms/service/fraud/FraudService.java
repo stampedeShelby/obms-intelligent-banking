@@ -104,18 +104,49 @@ public class FraudService {
     }
 
     /**
-     * Persists the assessment as an audit row.
+     * Persists the assessment for a transaction that reached the ledger.
      *
-     * <p>Runs in its own transaction so the record survives even when the
-     * transfer it describes is subsequently rolled back - a blocked attempt is
-     * precisely the thing an investigator needs to see.</p>
+     * <p>Propagation is {@code REQUIRED} - the alert joins the caller's
+     * transaction deliberately. The alert holds a foreign key to the ledger
+     * row, and that row is only visible inside the unit of work that created
+     * it; writing the alert in a separate transaction would violate the
+     * constraint. Joining also gives the right semantics: if the transfer
+     * rolls back, the record saying it was allowed should roll back with it,
+     * rather than leaving an alert pointing at a transaction that never
+     * existed.</p>
      *
-     * @param transaction the ledger row, null when the attempt never reached the ledger
+     * <p>A refused attempt never reaches the ledger and is recorded by
+     * {@link #recordBlockedAttempt} instead, which <em>does</em> use a
+     * separate transaction so that it survives the rollback.</p>
+     *
+     * @param transaction the ledger row this assessment belongs to
+     * @return the persisted alert
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public FraudAlert recordAssessment(Customer customer, Transaction transaction, String evaluatedRef,
+                                       BigDecimal amount, RiskAssessment assessment) {
+        return persist(customer, transaction, evaluatedRef, amount, assessment);
+    }
+
+    /**
+     * Persists the assessment for an attempt that was refused or held.
+     *
+     * <p>Runs in its own transaction so the record survives the rollback of
+     * the operation it describes. A blocked attempt that left no trace would
+     * be precisely the thing an investigator needs and does not have. No
+     * foreign key to a ledger row is set, because there is no ledger row.</p>
+     *
+     * @param evaluatedRef the pending reference, or null
      * @return the persisted alert
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public FraudAlert recordAssessment(Customer customer, Transaction transaction, String evaluatedRef,
-                                       BigDecimal amount, RiskAssessment assessment) {
+    public FraudAlert recordBlockedAttempt(Customer customer, String evaluatedRef,
+                                           BigDecimal amount, RiskAssessment assessment) {
+        return persist(customer, null, evaluatedRef, amount, assessment);
+    }
+
+    private FraudAlert persist(Customer customer, Transaction transaction, String evaluatedRef,
+                               BigDecimal amount, RiskAssessment assessment) {
         FraudAlert alert = new FraudAlert();
         alert.setCustomer(customer);
         alert.setTransaction(transaction);

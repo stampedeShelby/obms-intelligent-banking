@@ -169,7 +169,7 @@ public class TransferService {
                                                       TransferDtos.TransferRequest request,
                                                       RiskAssessment assessment) {
         Customer customer = source.getCustomer();
-        fraudService.recordAssessment(customer, null, null, request.amount(), assessment);
+        fraudService.recordBlockedAttempt(customer, null, request.amount(), assessment);
         auditService.recordFailure("transfer.blocked", "Account", source.getAccountNumber(),
                 "Blocked at risk score " + assessment.score() + ": " + assessment.primaryReason());
         notificationService.notify(customer, Enums.NotificationType.SUSPICIOUS_ACTIVITY,
@@ -189,7 +189,7 @@ public class TransferService {
         pending.setStatus(Enums.TransactionStatus.PENDING);
 
         Customer customer = source.getCustomer();
-        fraudService.recordAssessment(customer, null, pending.getPendingRef(),
+        fraudService.recordBlockedAttempt(customer, pending.getPendingRef(),
                 request.amount(), assessment);
         auditService.record("transfer.held", "PendingTransfer", pending.getPendingRef(),
                 "Held for review at risk score " + assessment.score());

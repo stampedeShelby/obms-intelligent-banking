@@ -1,0 +1,19 @@
+# Lint configuration for the AI service.
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # import sorting
+    "B",   # bugbear: likely bugs
+    "UP",  # pyupgrade
+    "SIM", # simplification
+    "C4",  # comprehension correctness
+]
+
+[lint.per-file-ignores]
+# Tests may use assert and longer expressions freely.
+"tests/*" = ["E501"]

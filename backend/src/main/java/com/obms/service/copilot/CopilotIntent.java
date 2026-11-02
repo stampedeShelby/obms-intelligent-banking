@@ -46,8 +46,17 @@ public enum CopilotIntent {
     UNKNOWN;
 
     private static final Pattern PERCENT = Pattern.compile("(\\d{1,3}(?:\\.\\d+)?)\\s*%");
+    /**
+     * Matches a rupee amount.
+     *
+     * <p>The grouped-digits alternative requires at least one comma group, so
+     * that a plain number falls through to the second alternative and is
+     * matched in full. With {@code *} instead of {@code +} the first
+     * alternative would match only the leading three digits of "5000" and
+     * yield 500.</p>
+     */
     private static final Pattern AMOUNT = Pattern.compile(
-            "(?:₹|rs\\.?|inr)?\\s*(\\d{1,3}(?:,\\d{2,3})*(?:\\.\\d{1,2})?|\\d+(?:\\.\\d{1,2})?)");
+            "(?:₹|rs\\.?|inr)?\\s*(\\d{1,3}(?:,\\d{2,3})+(?:\\.\\d{1,2})?|\\d+(?:\\.\\d{1,2})?)");
     private static final Pattern MONTH_COUNT = Pattern.compile(
             "(?:last|past|previous)\\s+(\\d{1,2}|one|two|three|four|five|six|twelve)\\s+months?");
 
