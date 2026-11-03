@@ -268,14 +268,36 @@ h2("Tools Used")
 table(
     ["Component", "Tool", "Purpose"],
     [
-        ["Backend (Java)", "SpotBugs 4.8.6",
+        ["Backend (Java)", "SpotBugs 4.8.6.6",
          "Bytecode defect detection: null dereferences, resource leaks, "
          "concurrency and correctness bugs"],
-        ["Backend (Java)", "PMD 3.25 with CPD",
+        ["Backend (Java)", "PMD 3.25.0 with CPD",
          "Source-level code smells and copy-paste duplication detection"],
         ["AI service (Python)", "Ruff", "Lint and static correctness checks"],
         ["Frontend (TypeScript)", "tsc --noEmit and ESLint",
          "Whole-project type checking and lint rules"],
+    ],
+)
+
+h2("Scope of Analysis")
+para(
+    "The figures below describe what the analysers actually traversed, so the "
+    "zero-critical result is read against a known volume of code rather than "
+    "an unstated one."
+)
+table(
+    ["Measure", "Count"],
+    [
+        ["Java source classes (main)", "100"],
+        ["Java classes instrumented by JaCoCo", "158"],
+        ["Java test classes", "21"],
+        ["JPA entity classes", "19"],
+        ["Relational tables in the generated schema", "20"],
+        ["REST endpoints across 9 controllers", "61"],
+        ["React screens (TypeScript)", "23"],
+        ["TypeScript / TSX source files", "41"],
+        ["Python modules in the AI service", "5"],
+        ["Frontend modules transformed by the production build", "2,295"],
     ],
 )
 
@@ -347,7 +369,7 @@ table(
          "in a service method and serialised immediately, and the lists they "
          "carry already come from Stream.toList() or List.of() and are "
          "unmodifiable. The exclusion does not extend to ledger, transfer or "
-         "security code. Total findings fell from 88 to 38."],
+         "security code. Total findings fell from 88 to 38; the LoginAttemptService added later in the cycle contributes two more of the same rank-18 advisory, so the current run reports 40."],
     ],
 )
 
@@ -450,6 +472,11 @@ table(
          "field names read from the Java record",
          "200 OK with all 13 fields accepted, confirming Jackson's camelCase "
          "output matches the service's Pydantic aliases", "Pass"],
+        ["TC-18", "API", "POST /api/v1/fraud/score — anomaly discrimination",
+         "Routine transfer (2,500 at 2pm, established payee) versus anomalous "
+         "one (95,000 at 3am, new payee, 5 debits in the hour)",
+         "Risk score rises from 0 to 78 with a populated primary reason and "
+         "per-factor explanations, not a bare number", "Pass"],
         ["TC-19", "Integration", "LoginLockoutTest — correctPasswordRefusedWhileLocked",
          "Five wrong passwords, then the correct one",
          "Rejected while the lockout stands; the failure counter commits even "
@@ -471,24 +498,20 @@ table(
         ["TC-24", "Unit", "ReferencesTest — transactionReferenceUsesBankDate",
          "Generate a transaction reference",
          "Carries the bank's own date, not the server's timezone date", "Pass"],
-        ["TC-18", "API", "POST /api/v1/fraud/score — anomaly discrimination",
-         "Routine transfer (2,500 at 2pm, established payee) versus anomalous "
-         "one (95,000 at 3am, new payee, 5 debits in the hour)",
-         "Risk score rises from 0 to 78 with a populated primary reason and "
-         "per-factor explanations, not a bare number", "Pass"],
     ],
 )
 
 h2("Execution Proof")
 para(
     "Every push runs the full suite on GitHub Actions and publishes a test "
-    "summary table to the run page. The most recent run reports 178 backend "
-    "tests, 60 AI-service tests and 31 frontend tests, with zero failures and "
+    "summary table to the run page. The most recent run reports 210 backend "
+    "tests (206 on H2 plus 4 against a real MySQL 8.4 server), 66 AI-service "
+    "tests and 31 frontend tests, with zero failures and "
     "zero errors."
 )
 bullets([f"CI runs: {RUN_URL}"])
-placeholder("Terminal or GitHub Actions output showing 'Tests run: 178, Failures: 0, Errors: 0'")
-placeholder("Pytest output showing '60 passed' and Vitest output showing '31 passed'")
+placeholder("Terminal or GitHub Actions output showing 'Tests run: 206, Failures: 0, Errors: 0'")
+placeholder("Pytest output showing '66 passed' and Vitest output showing '31 passed'")
 
 # ------------------------------------------------------- core implementation
 h2("Manual Verification Against the Running System")
@@ -636,7 +659,7 @@ placeholder("Fund transfer screen showing the risk-based verification step")
 
 h2("Module 2 — Core Business Logic / Processing")
 para(
-    "The central operation is the internal fund transfer, and it is "
+    "The server exposes 61 REST endpoints across nine controllers. The central operation is the internal fund transfer, and it is "
     "implemented as one integrated path rather than as independent features. "
     "A single customer action runs through ownership and account-state checks, "
     "available-balance and daily-limit validation, behavioural risk scoring, "
@@ -680,7 +703,7 @@ para(
     "drift from the code."
 )
 bullets([
-    "Entities: customers, users, roles, KYC records, accounts, transactions, "
+    "19 JPA entity classes map to 20 relational tables, emitted as a 466-line database/schema.sql. Entities: customers, users, roles, KYC records, accounts, transactions, "
     "beneficiaries, billers, bill payments, pending transfers, OTP tokens, "
     "notifications, savings goals, fraud alerts, financial score snapshots, "
     "copilot conversations and messages, idempotency records and audit logs.",
