@@ -553,7 +553,7 @@ para(
     "defect sat in a place the test configuration happened to exclude."
 )
 table(
-    ["#", "Defect found in the running system", "Why 279 passing tests missed it", "Resolution"],
+    ["#", "Defect found in the running system", "Why the passing suite missed it", "Resolution"],
     [
         ["1", "Backend crashed on first start-up with "
               "UnsupportedOperationException during demo seeding",
