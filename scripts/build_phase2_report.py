@@ -7,10 +7,12 @@ project's actual Phase-2 content.
 """
 from __future__ import annotations
 
+import os
 import sys
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Inches, Pt
+from PIL import Image
 
 TEMPLATE = sys.argv[1]
 OUT = sys.argv[2]
@@ -102,10 +104,34 @@ def table(headers, rows, widths=None):
             run.font.size = Pt(8.5)
     return t
 
-def placeholder(caption):
+SHOTS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "..", "docs", "screenshots")
+_fig = [0]
+
+def placeholder(caption, image=None):
+    """Insert the screenshot if it has been captured, else leave a slot."""
+    path = os.path.join(SHOTS, image) if image else None
+    _fig[0] += 1
+    if path and os.path.exists(path):
+        with Image.open(path) as im:
+            ratio = im.height / im.width
+        width = Inches(6.0)
+        if ratio * 6.0 > 7.2:                     # keep a tall shot on one page
+            width = Inches(7.2 / ratio)
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run().add_picture(path, width=width)
+        p.paragraph_format.space_before = Pt(6)
+        cap = doc.add_paragraph()
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = cap.add_run(f"Fig. {_fig[0]} — {caption}")
+        run.italic = True
+        run.font.size = Pt(8.5)
+        cap.paragraph_format.space_after = Pt(10)
+        return
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run(f"[ PASTE SCREENSHOT HERE — {caption} ]")
+    run = p.add_run(f"[ PASTE SCREENSHOT HERE — Fig. {_fig[0]}: {caption} ]")
     run.bold = True
     run.font.size = Pt(9)
     p.paragraph_format.space_before = Pt(6)
@@ -380,7 +406,8 @@ para(
     "successfully with zero critical findings."
 )
 bullets([f"CI runs: {RUN_URL}"])
-placeholder("GitHub Actions job summary showing the SpotBugs table with Critical = 0")
+placeholder("SpotBugs severity table and build-gate verdict for the backend: zero findings of bug rank 1-4",
+            "S1_spotbugs_zero_critical.png")
 
 # ------------------------------------------------------- testing execution
 h1("TESTING EXECUTION")
@@ -510,8 +537,10 @@ para(
     "zero errors."
 )
 bullets([f"CI runs: {RUN_URL}"])
-placeholder("Terminal or GitHub Actions output showing 'Tests run: 206, Failures: 0, Errors: 0'")
-placeholder("Pytest output showing '66 passed' and Vitest output showing '31 passed'")
+placeholder("Backend suite on GitHub Actions: 206 tests, no failures, errors or skips",
+            "S2_backend_206_tests.png")
+placeholder("AI-service suite (66 Pytest cases) and frontend suite (31 Vitest cases), both green",
+            "S3_ai_66_frontend_31.png")
 
 # ------------------------------------------------------- core implementation
 h2("Manual Verification Against the Running System")
@@ -633,7 +662,8 @@ table(
       "82 entries, with transfer.hold.released and transfer.hold.rejected "
       "both attributed to analyst@demo.obms"]],
 )
-placeholder("Fraud investigation queue, or the audit trail showing the release attributed to the analyst")
+placeholder("Fraud investigation queue: a held transfer awaiting analyst review, with its risk band, pending reference and the model that scored it",
+            "S4_fraud_queue.png")
 
 h1("CORE IMPLEMENTATION")
 
@@ -654,8 +684,10 @@ bullets([
     "investigation panel, audit log viewer",
     "Account: profile and settings",
 ])
-placeholder("Customer dashboard screen")
-placeholder("Fund transfer screen showing the risk-based verification step")
+placeholder("Customer dashboard: balances, month-to-date activity and the financial health score",
+            "S5_customer_dashboard.png")
+placeholder("Risk-based authentication: a medium-risk transfer requires a one-time code before any money moves",
+            "S6_transfer_stepup.png")
 
 h2("Module 2 — Core Business Logic / Processing")
 para(
@@ -683,11 +715,18 @@ bullets([
     "decisions — allow, step up, hold, or block. A step-up issues an OTP "
     "bound to that specific pending transfer, so a code obtained for a small "
     "transfer cannot authorise a large one.",
+    "The risk score is a blend, not a sum: the larger of the rule and model "
+    "contributions plus 40 percent of the smaller, capped at 100. Rules and "
+    "the Isolation Forest read the same features, so adding them outright "
+    "would count one signal twice. A transfer whose rule factors total 57 and "
+    "whose model contributes 31 therefore scores 69, which is what the "
+    "explanation screen displays alongside the individual factors.",
     "Client-supplied idempotency keys are inserted under a unique constraint "
     "in the same transaction as the ledger write, so a retried request cannot "
     "produce a second debit.",
 ])
-placeholder("Fraud alert detail showing the per-factor explanation of a risk score")
+placeholder("A held transfer with the per-factor explanation behind its risk score, shown to the customer",
+            "S7_fraud_explanation.png")
 
 h2("Module 3 — Data Persistence & Integration")
 para(
@@ -727,7 +766,8 @@ bullets([
     "exactly those, so a rename on either side fails the build instead of "
     "silently sending every transaction down the fallback path.",
 ])
-placeholder("Swagger UI listing the REST API, or a MySQL client showing the schema")
+placeholder("Swagger UI: the generated OpenAPI description of the REST interface",
+            "S8_swagger_api.png")
 
 # ------------------------------------------------------- rubric
 h1("EVALUATION RUBRICS")
